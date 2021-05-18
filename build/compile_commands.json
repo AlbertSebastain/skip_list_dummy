@@ -1,0 +1,7 @@
+[
+{
+  "directory": "/home/billy/code/skiplist_data/build",
+  "command": "/usr/bin/x86_64-linux-gnu-g++-7    -pthread  -O0 -Wall -g -ggdb   -o CMakeFiles/skiplist.dir/main.cpp.o -c /home/billy/code/skiplist_data/main.cpp",
+  "file": "/home/billy/code/skiplist_data/main.cpp"
+}
+]

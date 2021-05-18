@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 2.8)
+project(skiplist)
+set(CMAKE_BUILD_TYPE "Debug")
+set(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -Wall -g -ggdb")
+set(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
+set(CMAKE_CXX_FLAGS "-pthread")
+aux_source_directory(. DIR_SRC)
+add_executable(skiplist ${DIR_SRC})

@@ -1,0 +1,1 @@
+/usr/bin/x86_64-linux-gnu-g++-7  -pthread  -O0 -Wall -g -ggdb  -rdynamic CMakeFiles/skiplist.dir/main.cpp.o  -o skiplist 
