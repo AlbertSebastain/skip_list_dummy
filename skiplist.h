@@ -1,3 +1,4 @@
+# include <sys/socket.h>
 # include <cstdio>
 # include <pthread.h>
 # include <time.h>
@@ -5,13 +6,19 @@
 # include <typeinfo>
 # include <iostream>
 #  include <memory>
+# include <sstream>
 # include <vector>
 # include <fstream>
 # include <mutex>
 # include <unordered_map>
+
+# include "config.h"
+
+
 using namespace std;
 template<typename V> class Node;
 template<typename V> class skiplist;
+template<typename V> class help_send_str;
 
 template<typename V> 
 class Node
@@ -35,9 +42,9 @@ template< typename V>
 class skiplist
 {
     public:
-        skiplist(int max_level): m_max_level(max_level), m_item_num(0),head(nullptr) {initial_skiplist();}
+        skiplist(int max_level):  m_max_level(max_level), m_item_num(0),m_conn_fd(0),head(nullptr) {initial_skiplist();}
         ~skiplist();
-        bool search_key(float key, V& value) const;
+        bool search_key(float key, V& value);
         bool search_key_fast(float key, V& value);
         bool insert_item(float key, V valule, int node_level = 0);
         bool delete_item(float key);
@@ -46,6 +53,8 @@ class skiplist
         void initial_skiplist();
         void save_file(string);
         void load_file(string);
+        void set_server_mode(int);
+        friend class help_send_str<V>;
     private:
         int get_random_level();
         bool valid_string(string& str);
@@ -53,9 +62,33 @@ class skiplist
         int m_max_level;
         int m_item_num;
         int m_skip_list_level;
+        int m_conn_fd;
+        bool server_mode;
+        stringstream buffer;
         Node<V>* head;
         mutex m_mutex;
         unordered_map<float,Node<V>*> m_map;
+};
+template<typename V>
+class help_send_str
+{
+    public:
+        help_send_str(skiplist<V>* ptr): m_ptr(ptr) {};
+        ~help_send_str()
+        {
+            send_str();
+        }
+    
+    private:
+        skiplist<V>* m_ptr;
+        void send_str()
+        {
+            if((m_ptr->server_mode) && (! m_ptr->buffer.str().empty()))
+            {
+                send(m_ptr->m_conn_fd, m_ptr->buffer.str().c_str(),m_ptr->buffer.str().size(),0);
+            }
+            m_ptr->buffer.str("");
+        }
 };
 template< typename V>
 Node<V>::Node(int level): forward(level+1),  m_level(level)
@@ -99,8 +132,11 @@ bool Node<V>::set_value(V value)
 }
 
 template<typename V>
-bool skiplist<V>::search_key(float key, V& value) const
+bool skiplist<V>::search_key(float key, V& value)
 {
+    # ifdef SERVER
+    help_send_str<V> send_str(this);
+    # endif
     Node<V>* cur;
     cur = head;
     for(int i=m_skip_list_level;i>=0;i--)
@@ -113,7 +149,11 @@ bool skiplist<V>::search_key(float key, V& value) const
     cur = cur->forward[0];
     if(cur == nullptr || cur->show_key() != key)
     {
+        # ifndef SERVER
         cout<<"cannot find key"<<endl;
+        # else
+        buffer<<"cannot find key\n";
+        #endif
         return false;
     }
     else
@@ -137,6 +177,7 @@ void skiplist<V>::initial_skiplist()
             delete pre;
         }
     }
+    buffer.clear();
     m_item_num = 0;
     m_skip_list_level = 0;
     head = nullptr;
@@ -158,12 +199,19 @@ int skiplist<V>::size()
 template< typename V>
 bool skiplist<V>::insert_item(float key, V value, int node_level)
 {
+    # ifdef SERVER
+    help_send_str<V> send_str(this);
+    # endif
     lock_guard<mutex> guard(m_mutex);
     vector<Node<V>*> update(m_max_level+1);
     Node<V>* cur = head;
     if(m_map.find(key) != m_map.end())
     {
+        # ifndef SERVER
         cout<<"insert item fail, key is already in skiplist"<<endl;
+        # else
+        buffer<<"insert item fail, key is already in skiplist\n";
+        # endif
         return false;
     }
     for(int i=m_skip_list_level;i>=0;i--)
@@ -196,16 +244,27 @@ bool skiplist<V>::insert_item(float key, V value, int node_level)
     }
     m_map[key] = add_node;
     m_item_num++;
+    # ifndef SERVER
     cout<<"successfully add node"<<endl;
+    # else
+    buffer << "successfully add node\n";
+    # endif
     return true;
 }
 template<typename V>
 bool skiplist<V>::delete_item(float key)
 {
+    #ifdef SERVER
+    help_send_str<V> send_str(this);
+    # endif
     lock_guard<mutex> guard(m_mutex);
     if(m_map.find(key) == m_map.end())
     {
+        # ifndef SERVER
         cout<<"delete node fail, cannot find the node"<<endl;
+        # else
+        buffer<< "delete node fail, cannot find the node\n";
+        # endif
         return false;
     }
     vector<Node<V>*> update(m_max_level+1);
@@ -221,7 +280,7 @@ bool skiplist<V>::delete_item(float key)
     cur = cur->forward[0];
     if(cur != nullptr && cur->show_key() == key)
     {
-        for(int i=0;i<m_skip_list_level;i++)
+        for(int i=0;i<=m_skip_list_level;i++)
         {
             if(update[i]->forward[i] == nullptr || update[i]->forward[i]->show_key() != key)
             {
@@ -233,7 +292,11 @@ bool skiplist<V>::delete_item(float key)
         {
             m_skip_list_level--;
         }
+        # ifndef SERVER
         cout<<"successfully delete node"<<endl;
+        # else
+        buffer<< "successfully delete node\n";
+        # endif
         m_item_num--;
         Node <V>* pre_node = m_map[key];
         delete pre_node;
@@ -244,33 +307,72 @@ bool skiplist<V>::delete_item(float key)
 template<typename V>
 void skiplist<V>::show_skiplist()
 {
+    # ifdef SERVER
+    help_send_str<V> send_str(this);
+    # endif
+    # ifndef SERVER
     cout<<"---------skip list-------------"<<endl;
+    # else
+    buffer<<"---------skip list-------------\n";
+    # endif
     Node<V>* cur;
     for(int i=m_skip_list_level;i>=1;i--)
     {
         cur = head->forward[i];
-        cout<<"level"<<i<<":";
+        # ifndef SERVER
+            cout<<"level"<<i<<":";
+        # else
+        buffer<< "level"<<i<<":";
+        # endif
         while(cur != nullptr)
         {
+            # ifndef SERVER
             cout<<cur->show_key()<<", ";
+            # else
+            buffer<<cur->show_key()<<",";
+            # endif
             cur = cur->forward[i];
         }
+        # ifndef SERVER
         cout<<"\n";
+        # else
+        buffer<<"\n";
+        # endif
     }
     cur = head->forward[0];
+    # ifndef SERVER
     cout<<endl;
     cout<<"level 0: ";
+    # else
+    buffer<<"\n";
+    buffer<<"level 0:";
+    # endif
     while(cur != nullptr)
     {  
+        # ifndef SERVER
         cout<<cur->show_key()<<": "<<cur->show_value()<<", ";
+        # else
+        buffer<<cur->show_key()<<":"<<cur->show_value()<<",";
+        # endif
         cur = cur->forward[0];
     }
+    # ifndef SERVER
     cout<<endl;
+    # else
+    buffer<< "\n";
+    # endif
+    # ifndef SERVER
     cout<<"--------Skip list show finish--------"<<endl;
+    # else
+    buffer<< "--------Skip list show finish--------\n";
+    # endif
 }
 template< typename V>
 bool skiplist<V>::search_key_fast(float key, V& value)
 {
+    # ifdef SERVER
+    help_send_str<V> send_str(this);
+    # endif
     Node<V>* node;
     if(m_map.find(key) != m_map.end())
     {
@@ -280,16 +382,27 @@ bool skiplist<V>::search_key_fast(float key, V& value)
     }
     else
     {
+        # ifndef SERVER
         cout<<"cannot find the key"<<endl;
+        # else
+        buffer<< "cannot find the key\n";
+        # endif
         return false;
     }
 }
 template<typename V>
 void skiplist<V>::save_file(string path)
 {
+    # ifdef SERVER
+    help_send_str<V> send_str(this);
+    # endif
     ofstream writer;
     writer.open(path);
+    # ifndef SERVER
     cout<<"start save file in "<<path<<endl;
+    # else
+    buffer<< "start save file in " <<path <<"\n";
+    # endif
     Node<V>* cur;
     cur = head;
     cur = cur->forward[0];
@@ -299,7 +412,11 @@ void skiplist<V>::save_file(string path)
         cout<<cur->show_level()<<":"<<cur->show_key()<<":"<<cur->show_value()<<"\n";
         cur = cur->forward[0];
     }
+    # ifndef SERVER
     cout<<"successfully saved the skiplist"<<endl;
+    # else
+    buffer<< "successfully saved the skiplist\n";
+    # endif
     writer.flush();
     writer.close();
 }
@@ -334,12 +451,19 @@ bool skiplist<V>::parse_string(string& str, float& key, V& value, int& level)
 template<typename V>
 void skiplist<V>::load_file(string path)
 {
+    # ifdef SERVER
+    help_send_str<V> send_str(this);
+    # endif
     if(typeid(V) != typeid(string))
     {
         cout<<"when you load file you must keep the type of   value as string"<<endl;
         return;
     }
+    # ifndef SERVER
     cout<<"start load file, the skip list will be initialed. All the nodes will be deleted. please  save the skip list when necessary."<<endl;
+    # else
+    buffer<< "start load file, the skip list will be initialed. All the nodes will be deleted. please  save the skip list when necessary.\n";
+    # endif
     initial_skiplist();
     ifstream reader;
     reader.open(path);
@@ -351,9 +475,14 @@ void skiplist<V>::load_file(string path)
     {
         parse_string(str,key, value, level);
         cout<<"key is "<<key<<", "<<"value is "<<value<<","<<"level is "<<level<<endl;
-        
+
         insert_item(key, value,level);
     }
+    # ifndef SERVER
+    cout<<"load file successfully"<<endl;
+    # else
+    buffer<< "load file successfully\n";
+    # endif
     reader.close();
 }
 template<typename V>
@@ -369,5 +498,10 @@ skiplist<V>::~skiplist()
         delete pre;
     }
 }
-
+template<typename V>
+void skiplist<V>::set_server_mode(int conn_fd)
+{
+    m_conn_fd = conn_fd;
+    server_mode = true;
+}
 
