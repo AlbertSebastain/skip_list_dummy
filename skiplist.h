@@ -1,3 +1,5 @@
+# ifndef SKIP_LIST_H
+# define SKIP_LIST_H
 # include <sys/socket.h>
 # include <cstdio>
 # include <pthread.h>
@@ -504,4 +506,5 @@ void skiplist<V>::set_server_mode(int conn_fd)
     m_conn_fd = conn_fd;
     server_mode = true;
 }
+#endif
 
