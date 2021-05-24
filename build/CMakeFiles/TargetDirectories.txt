@@ -1,3 +1,0 @@
-/home/billy/code/skiplist_data/build/CMakeFiles/rebuild_cache.dir
-/home/billy/code/skiplist_data/build/CMakeFiles/skiplist.dir
-/home/billy/code/skiplist_data/build/CMakeFiles/edit_cache.dir
