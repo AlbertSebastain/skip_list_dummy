@@ -189,9 +189,12 @@ void skiplist<V>::initial_skiplist()
 template<typename V>
 int skiplist<V>::get_random_level()
 {
-    int re;
-    re = (int) (rand()%m_max_level)+1;
-    return re;
+    int k = 1;
+    while (rand() % 2) {
+        k++;
+    }
+    k = (k < m_max_level) ? k : m_max_level;
+    return k;
 }
 template<typename V>
 int skiplist<V>::size()

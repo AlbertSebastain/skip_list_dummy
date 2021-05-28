@@ -1,1 +1,3 @@
-# define SERVER
+#define NUM_THREADS 10
+# define TEST_COUNT 1000000
+# define SEARCH

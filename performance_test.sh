@@ -12,7 +12,7 @@ fi
 touch config.h.in
 test_fun=("INSERT" "SEARCH_FAST" "SEARCH")
 num_threads=(1 10)
-test_count=(10000 100000)
+test_count=(10000 100000 1000000)
 for fun in ${test_fun[@]}
 do
     for thread in ${num_threads[@]}
